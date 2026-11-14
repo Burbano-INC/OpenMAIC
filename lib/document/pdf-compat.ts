@@ -1,3 +1,4 @@
+import { getChapterSource, withChapterSource } from './chapter-source';
 import type { ParsedPdfContent } from '@/lib/types/pdf';
 import type {
   DocumentArtifact,
@@ -121,19 +122,22 @@ export function parsedPdfToDocumentArtifact(
           data: src,
         }));
 
-  return {
-    metadata: {
-      fileName: input.fileName ?? parsed.metadata?.fileName,
-      fileSize: input.fileSize ?? parsed.metadata?.fileSize,
-      mimeType: input.mimeType,
-      pageCount: parsed.metadata?.pageCount,
-      providerId: input.config.providerId,
-      processingTime: parsed.metadata?.processingTime,
+  return withChapterSource(
+    {
+      metadata: {
+        fileName: input.fileName ?? parsed.metadata?.fileName,
+        fileSize: input.fileSize ?? parsed.metadata?.fileSize,
+        mimeType: input.mimeType,
+        pageCount: parsed.metadata?.pageCount,
+        providerId: input.config.providerId,
+        processingTime: parsed.metadata?.processingTime,
+      },
+      blocks,
+      assets,
+      providerRaw: parsed,
     },
-    blocks,
-    assets,
-    providerRaw: parsed,
-  };
+    input.config.providerId === 'mineru' ? getChapterSource(parsed) : undefined,
+  );
 }
 
 export function documentArtifactToParsedPdfContent(artifact: DocumentArtifact): ParsedPdfContent {
@@ -175,28 +179,31 @@ export function documentArtifactToParsedPdfContent(artifact: DocumentArtifact): 
       position: bboxToPosition(block.bbox),
     }));
 
-  return {
-    text,
-    images,
-    ...(tables.length > 0 ? { tables } : {}),
-    ...(formulas.length > 0 ? { formulas } : {}),
-    ...(layout.length > 0 ? { layout } : {}),
-    metadata: {
-      ...rawMetadata,
-      fileName: artifact.metadata.fileName,
-      fileSize: artifact.metadata.fileSize,
-      pageCount: artifact.metadata.pageCount ?? rawMetadata?.pageCount ?? 0,
-      parser: rawMetadata?.parser,
-      processingTime: artifact.metadata.processingTime ?? rawMetadata?.processingTime,
-      imageMapping,
-      pdfImages: imageAssets.map((asset) => ({
-        id: asset.id,
-        src: asset.data as string,
-        pageNumber: asset.pageNumber ?? 0,
-        description: asset.description,
-        width: asset.width,
-        height: asset.height,
-      })),
+  return withChapterSource(
+    {
+      text,
+      images,
+      ...(tables.length > 0 ? { tables } : {}),
+      ...(formulas.length > 0 ? { formulas } : {}),
+      ...(layout.length > 0 ? { layout } : {}),
+      metadata: {
+        ...rawMetadata,
+        fileName: artifact.metadata.fileName,
+        fileSize: artifact.metadata.fileSize,
+        pageCount: artifact.metadata.pageCount ?? rawMetadata?.pageCount ?? 0,
+        parser: rawMetadata?.parser,
+        processingTime: artifact.metadata.processingTime ?? rawMetadata?.processingTime,
+        imageMapping,
+        pdfImages: imageAssets.map((asset) => ({
+          id: asset.id,
+          src: asset.data as string,
+          pageNumber: asset.pageNumber ?? 0,
+          description: asset.description,
+          width: asset.width,
+          height: asset.height,
+        })),
+      },
     },
-  };
+    getChapterSource(artifact),
+  );
 }

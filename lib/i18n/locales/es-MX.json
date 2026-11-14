@@ -2187,6 +2187,10 @@
         "webFetch": {
           "name": "Obtener páginas web",
           "desc": "Permite al agente leer páginas web autorizadas en la sesión."
+        },
+        "materialChapters": {
+          "name": "Reconocimiento de capítulos",
+          "desc": "Identifica capítulos y secciones en documentos largos."
         }
       },
       "source": {
@@ -2202,7 +2206,9 @@
           "search": "Búsqueda",
           "fetch": "Lectura",
           "image": "Imagen",
-          "video": "Video"
+          "video": "Video",
+          "parse": "Análisis",
+          "chapters": "Capítulos"
         }
       },
       "empty": {
