@@ -1,0 +1,17 @@
+# Model configuration. DeepSeek only for the first pass; add anthropic/openai providers + slots later.
+# The key comes from the Secret `openmaic-env` (DEEPSEEK_API_KEY); never put keys in this file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openmaic-config
+  namespace: openmaic
+data:
+  openmaic.yml: |
+    providers:
+      deepseek:
+        preset: deepseek
+        apiKey: ${DEEPSEEK_API_KEY}
+        models: [deepseek-flash, deepseek-v4-pro]
+    slots:
+      llm: deepseek:deepseek-flash
+      course.outline: deepseek:deepseek-v4-pro

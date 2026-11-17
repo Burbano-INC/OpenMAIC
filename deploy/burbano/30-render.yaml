@@ -1,0 +1,127 @@
+# MP4 render service (Chromium + FFmpeg). Scaled to 0 by default; the CronJobs below scale it
+# up overnight (US Eastern) and back down in the morning. While it is down the app reports
+# MP4 export as unavailable and offers the ZIP instead (jobs are not queued).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openmaic-render
+  namespace: openmaic
+  labels: {app.kubernetes.io/name: openmaic-render}
+spec:
+  replicas: 0
+  selector:
+    matchLabels: {app.kubernetes.io/name: openmaic-render}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: openmaic-render}
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: pi-primary   # most free RAM (8 GB); it only runs at night
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: render
+          image: ghcr.io/burbano-inc/openmaic-render:v1.4.2
+          ports:
+            - containerPort: 9000
+          env:
+            - {name: PORT, value: "9000"}
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN]   # entrypoint installs the iptables egress lockdown, then drops to user `render`
+          volumeMounts:
+            - {name: work, mountPath: /var/lib/openmaic}
+            - {name: tmp, mountPath: /tmp}
+          readinessProbe:
+            httpGet: {path: /health, port: 9000}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {cpu: "2", memory: 2Gi}
+      volumes:
+        - name: work
+          emptyDir: {sizeLimit: 8Gi}
+        - name: tmp
+          emptyDir: {sizeLimit: 2Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openmaic-render
+  namespace: openmaic
+spec:
+  selector: {app.kubernetes.io/name: openmaic-render}
+  ports:
+    - {port: 9000, targetPort: 9000}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: render-scaler
+  namespace: openmaic
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: render-scaler
+  namespace: openmaic
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["openmaic-render"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: render-scaler
+  namespace: openmaic
+subjects:
+  - {kind: ServiceAccount, name: render-scaler, namespace: openmaic}
+roleRef:
+  kind: Role
+  name: render-scaler
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: render-up
+  namespace: openmaic
+spec:
+  schedule: "0 22 * * *"   # 22:00 US Eastern (cluster cron runs in local time, see cluster-ops docs/notes.md)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: render-scaler
+          restartPolicy: OnFailure
+          containers:
+            - name: scale
+              image: rancher/kubectl:v1.34.3
+              command: ["kubectl", "-n", "openmaic", "scale", "deploy/openmaic-render", "--replicas=1"]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: render-down
+  namespace: openmaic
+spec:
+  schedule: "0 7 * * *"   # 07:00 US Eastern
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: render-scaler
+          restartPolicy: OnFailure
+          containers:
+            - name: scale
+              image: rancher/kubectl:v1.34.3
+              command: ["kubectl", "-n", "openmaic", "scale", "deploy/openmaic-render", "--replicas=0"]
