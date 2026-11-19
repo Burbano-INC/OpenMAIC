@@ -37,7 +37,7 @@ spec:
           ports:
             - containerPort: 3000
           envFrom:
-            - secretRef: {name: openmaic-env}   # DEEPSEEK_API_KEY, DATABASE_URL, ACCESS_CODE, OPENMAIC_SECRET_KEY
+            - secretRef: {name: openmaic-env}   # DEEPSEEK_API_KEY, DATABASE_URL, OPENMAIC_SECRET_KEY (no ACCESS_CODE: gated by Cloudflare Access)
           env:
             - {name: OWNER_SINGLE_USER, value: "true"}
             - {name: TRUST_PROXY_HEADERS, value: "true"}
@@ -70,7 +70,7 @@ metadata:
   name: openmaic
   namespace: openmaic
 spec:
-  type: NodePort
+  type: ClusterIP   # reached only via the Cloudflare tunnel (Access-gated); no LAN NodePort
   selector: {app.kubernetes.io/name: openmaic}
   ports:
-    - {name: http, port: 3000, targetPort: 3000, nodePort: 30107}
+    - {name: http, port: 3000, targetPort: 3000}
